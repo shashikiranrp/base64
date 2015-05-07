@@ -51,6 +51,8 @@ class Bits24 {
       if (ch_b64_val == Base64::B64_MAX) {
         return false;  
       }
+    } else {
+      return false;
     }
 
     ch_b64_val = 0x3Fu & ch_b64_val; // don't need anything after 6th place.
@@ -182,10 +184,25 @@ bool Base64::Base64::decode(std::istream& is, std::ostream& os)
       }
     }
 
-    if (!stop_now) {
-      os.put(static_cast<char>(block.byte0));
-      os.put(static_cast<char>(block.byte1));
-      os.put(static_cast<char>(block.byte2));
+    if (bytes_read > 0) {
+      bytes_read--;
+      if (bytes_read > 0) {
+        bytes_read--;
+        os.put(static_cast<char>(block.byte0));
+        if (bytes_read > 0) {
+          bytes_read--;
+          os.put(static_cast<char>(block.byte1));
+          if (bytes_read > 0) {
+            os.put(static_cast<char>(block.byte2));
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      } else {
+        break;
+      } 
     }
   } while(!stop_now);
   return status;
