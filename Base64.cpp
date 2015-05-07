@@ -12,47 +12,46 @@ class Bits24 {
   public:
   byte byte0{0}, byte1{0}, byte2{0};
 
-  int xtract_group(Base64Group group_id) 
+  unsigned int xtract_group(Base64Group group_id) 
   {
     unsigned int result = 0x0;
     switch (group_id) {
       case FST:
-        result = (byte0 & 0xFC) >> 2;
+        result = (byte0 & 0xFCu) >> 2u;
         break;
 
       case SND:
-        result = ((byte0 & 0x03) << 4) | ((byte1 & 0xF0) >> 4);
+        result = ((byte0 & 0x03u) << 4u) | ((byte1 & 0xF0u) >> 4u);
         break;
 
       case THD:
-        result = ((byte1 & 0x0F) << 2) | ((byte2 & 0xC0) >> 6);
+        result = ((byte1 & 0x0Fu) << 2u) | ((byte2 & 0xC0u) >> 6u);
         break;
 
       case FTH:
-        result = byte2 & 0x3F;
+        result = byte2 & 0x3Fu;
         break;
-
-      default:
-        throw std::runtime_error(std::string("Bits24::xtract_group: invalid group: ") + std::to_string(group_id));
     }
     return result;
   }
 
 };
 
-byte get_next_encodable_char(std::istream& is, std::ostream& os, bool& is_bad)
+static byte get_next_encodable_char(std::istream& is, bool& is_bad)
 {
+  static int count{0};
   byte next_byte{0};
-  do {
-    next_byte = is.get();
-    is_bad = !is.good();
-    if ('\r' == next_byte || '\n' == next_byte) {
-      continue;
-    } else {
-      break;
-    }
-  } while(!is_bad);
-  return is_bad ? 0 : next_byte;
+  next_byte = static_cast<byte>(is.get());
+
+  if (is.eof()) {
+    is_bad = true;
+    next_byte = 0;
+  } else {
+    ++count;
+    is_bad = false;
+  }
+
+  return next_byte;
 }
 
 bool Base64::Base64::encode(std::istream& is, std::ostream& os) 
@@ -60,42 +59,52 @@ bool Base64::Base64::encode(std::istream& is, std::ostream& os)
   bool status{true}, stream_bad{false}, stop_now{false};
   do {
     Bits24 block;
-    int padding = 0;
-    byte next_byte = get_next_encodable_char(is, os, stream_bad); 
-    block.byte0 = next_byte;
+    int bytes_read{0};
+    byte next_byte = get_next_encodable_char(is, stream_bad); 
     if (stream_bad) {
-      padding  = 2;
-      block.byte1 = block.byte2 = 0;
       stop_now = true;
     } else {
-      next_byte = get_next_encodable_char(is, os, stream_bad);
-      block.byte1 = next_byte;
+      block.byte0 = next_byte;
+      bytes_read++;
+      next_byte = get_next_encodable_char(is, stream_bad);
       if (stream_bad) {
-        padding  = 1;
-        block.byte2 = 0;
+        block.byte1 = block.byte2 = 0;
         stop_now = true;
       } else {
-        next_byte = get_next_encodable_char(is, os, stream_bad);
-        block.byte2 = next_byte;
+        block.byte1 = next_byte;
+        bytes_read++;
+        next_byte = get_next_encodable_char(is, stream_bad);
         if (stream_bad) {
+          block.byte2 = 0;
           stop_now = true;
+        } else {
+          block.byte2 = next_byte;
+          bytes_read++;
         }
       }
     }
-    os.put(CharMap.at(block.xtract_group(FST)));
-    os.put(CharMap.at(block.xtract_group(SND)));
-    os.put(CharMap.at(block.xtract_group(THD)));
-    os.put(CharMap.at(block.xtract_group(FTH)));
-    while (padding-- > 0) {
-      os.put('=');
+    
+    if (bytes_read > 0) {
+      os.put(CharMapA[block.xtract_group(FST)]);
+      os.put(CharMapA[block.xtract_group(SND)]);
+      --bytes_read;
+      if (bytes_read > 0) {
+        os.put(CharMapA[block.xtract_group(THD)]);
+      } else {
+        os.put('=');
+        os.put('=');
+        break;
+      }
+      --bytes_read;
+      if (bytes_read > 0) {
+        os.put(CharMapA[block.xtract_group(FTH)]);
+      } else {
+        os.put('=');
+        break;
+      }
     }
   } while(!stop_now);
 
   return status;
 }
 
-bool Base64::Base64::decode(std::istream& is, std::ostream& os) 
-{
-  bool status = true;
-  return status;
-}

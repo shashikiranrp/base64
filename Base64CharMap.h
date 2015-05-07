@@ -5,7 +5,7 @@
 
 namespace Base64 {
 
-  extern const std::unordered_map<int, char> CharMap;
+  extern const char CharMapA[];
 }
 
 
