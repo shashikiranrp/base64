@@ -5,6 +5,8 @@
 #include <ostream>
 
 namespace Base64 {
+
+  extern bool VERBOSE_FLAG;
   
   class Base64 {
     

@@ -7,6 +7,8 @@
 typedef unsigned char byte;
 typedef enum {FST, SND, THD, FTH} Base64Group;
 
+bool Base64::VERBOSE_FLAG = false;
+
 class Bits24 {
   
   public:
@@ -35,9 +37,50 @@ class Bits24 {
     return result;
   }
 
+  void clear()
+  {
+    byte0 = byte1 = byte2 = 0u;
+  }
+
+  bool put_group(Base64Group group_id, unsigned char ch)
+  {
+    unsigned int ch_b64_val{0};
+
+    if ('=' != ch) {
+      ch_b64_val = Base64::reverse_map(ch);
+      if (ch_b64_val == Base64::B64_MAX) {
+        return false;  
+      }
+    }
+
+    ch_b64_val = 0x3Fu & ch_b64_val; // don't need anything after 6th place.
+
+    switch (group_id) {
+      case FST:
+        byte0 |= ch_b64_val << 2u; 
+        break;
+
+      case SND:
+        byte0 |= ch_b64_val >> 4u;
+        byte1 |= ch_b64_val << 4u;
+      break;
+
+      case THD:
+        byte1 |= ch_b64_val >> 2u;
+        byte2 |= ch_b64_val << 6u;
+      break;
+
+      case FTH:
+        byte2 |= ch_b64_val;
+      break;
+    }
+
+    return true;
+  }
+
 };
 
-static byte get_next_encodable_char(std::istream& is, bool& is_bad)
+static byte get_next_byte(std::istream& is, bool& is_bad)
 {
   static int count{0};
   byte next_byte{0};
@@ -60,20 +103,20 @@ bool Base64::Base64::encode(std::istream& is, std::ostream& os)
   do {
     Bits24 block;
     int bytes_read{0};
-    byte next_byte = get_next_encodable_char(is, stream_bad); 
+    byte next_byte = get_next_byte(is, stream_bad); 
     if (stream_bad) {
       stop_now = true;
     } else {
       block.byte0 = next_byte;
       bytes_read++;
-      next_byte = get_next_encodable_char(is, stream_bad);
+      next_byte = get_next_byte(is, stream_bad);
       if (stream_bad) {
         block.byte1 = block.byte2 = 0;
         stop_now = true;
       } else {
         block.byte1 = next_byte;
         bytes_read++;
-        next_byte = get_next_encodable_char(is, stream_bad);
+        next_byte = get_next_byte(is, stream_bad);
         if (stream_bad) {
           block.byte2 = 0;
           stop_now = true;
@@ -105,6 +148,46 @@ bool Base64::Base64::encode(std::istream& is, std::ostream& os)
     }
   } while(!stop_now);
 
+  return status;
+}
+
+bool Base64::Base64::decode(std::istream& is, std::ostream& os)
+{
+  bool status{true}, stream_bad{false}, stop_now{false};
+  do {
+    Bits24 block;
+    int bytes_read{0};
+    byte next_byte = get_next_byte(is, stream_bad);
+    if (stream_bad || !block.put_group(FST, next_byte)) {
+      stop_now = true;
+    } else {
+      bytes_read++;
+      next_byte = get_next_byte(is, stream_bad);
+      if (stream_bad || !block.put_group(SND, next_byte)) {
+        stop_now = true;
+      } else {
+        bytes_read++;
+        next_byte = get_next_byte(is, stream_bad);
+        if (stream_bad || !block.put_group(THD, next_byte)) {
+          stop_now = true;
+        } else {
+          bytes_read++;
+          next_byte = get_next_byte(is, stream_bad);
+          if (stream_bad || !block.put_group(FTH, next_byte)) {
+            stop_now = true;
+          } else {
+            bytes_read++;
+          }
+        }
+      }
+    }
+
+    if (!stop_now) {
+      os.put(static_cast<char>(block.byte0));
+      os.put(static_cast<char>(block.byte1));
+      os.put(static_cast<char>(block.byte2));
+    }
+  } while(!stop_now);
   return status;
 }
 
