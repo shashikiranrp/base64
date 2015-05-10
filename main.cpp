@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
                 std::cerr << "\t-e " << "encode to base64 (default action)." << std::endl;
                 std::cerr << "\t-d " << "decode from base64." << std::endl;
                 std::cerr << "\t-i " << "read input from file (default: stdin)." << std::endl;
-                std::cerr << "\t-o " << "write output to file. (default: stdout)" << std::endl;
+                std::cerr << "\t-o " << "write output to file (default: stdout)." << std::endl;
                 std::cerr << "\t-h " << "show this help and exit." << std::endl;
                 exit(1);
         }
